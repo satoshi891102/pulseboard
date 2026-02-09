@@ -10,18 +10,22 @@ Type any topic — get instant, AI-powered analysis from Hacker News, Reddit, an
 
 ### Features
 
+- **Pulse Score** — Single 0-100 metric measuring topic attention intensity
 - **Narrative Summary** — AI-generated overview with sentiment analysis
 - **Activity Timeline** — Bar chart showing when discussions peaked
+- **Source Breakdown** — Visual bar showing platform distribution
 - **Trending Discussions** — Top posts sorted by engagement
 - **Key Voices** — Most influential authors and their positions
 - **News Feed** — Latest articles from Google News
 - **Controversy Map** — Bulls vs Bears breakdown
 - **Related Topics** — Clickable keyword cloud extracted from content
 - **Predicted Next Moves** — Forward-looking analysis based on patterns
-- **Topic Comparison** — Head-to-head analysis of two topics
+- **Topic Comparison** — Head-to-head analysis with Pulse Scores
+- **Watchlist** — Track topics over time, refresh scores
 - **Trending Now** — Live trending topics from HN + Google News
 - **Search History** — Track and revisit past analyses
 - **Export Reports** — Download analysis as text files
+- **Dynamic OG Images** — Social cards generated per topic
 - **Auto-refresh** — Updates every 5 minutes
 - **Keyboard shortcut** — ⌘K to focus search
 
@@ -63,6 +67,7 @@ src/
 │   ├── page.tsx           # Landing page
 │   ├── dashboard/page.tsx # Analysis dashboard
 │   ├── compare/page.tsx   # Topic comparison
+│   ├── watchlist/page.tsx # Topic watchlist
 │   ├── history/page.tsx   # Search history
 │   └── api/
 │       ├── analyze/       # Main analysis endpoint

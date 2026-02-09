@@ -209,6 +209,25 @@ function DashboardContent() {
             )}
             {data && (
               <button
+                onClick={() => {
+                  const stored = localStorage.getItem("pulseboard-watchlist");
+                  const list = stored ? JSON.parse(stored) : [];
+                  if (!list.some((i: any) => i.topic.toLowerCase() === topic.toLowerCase())) {
+                    list.unshift({ topic, addedAt: new Date().toISOString(), lastPulseScore: data.pulseScore, lastSentiment: data.sentiment });
+                    localStorage.setItem("pulseboard-watchlist", JSON.stringify(list));
+                    alert(`"${topic}" added to watchlist`);
+                  } else {
+                    alert(`"${topic}" is already in your watchlist`);
+                  }
+                }}
+                className="px-3 py-1.5 text-sm rounded-lg border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-white transition-colors"
+                title="Add to watchlist"
+              >
+                👁
+              </button>
+            )}
+            {data && (
+              <button
                 onClick={handleExport}
                 className="px-3 py-1.5 text-sm rounded-lg border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-white transition-colors"
               >

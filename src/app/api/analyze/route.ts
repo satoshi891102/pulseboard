@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchReddit, fetchHN, fetchGoogleNews, type Discussion, type NewsItem } from "@/lib/sources";
 import { extractKeywords } from "@/lib/wordcloud";
+import { analyzeSentiment } from "@/lib/sentiment";
 
 interface CacheEntry {
   data: any;
@@ -20,10 +21,17 @@ function generateAnalysis(topic: string, reddit: Discussion[], hn: Discussion[],
   const highEngagement = [...reddit, ...hn].filter(d => d.score > 50 || d.comments > 20);
   const recentPosts = [...reddit, ...hn].filter(d => d.timeAgo.includes("m ago") || d.timeAgo.includes("1h ago") || d.timeAgo.includes("2h ago"));
   
-  let sentiment = "neutral";
-  if (totalPosts === 0 && totalNews === 0) sentiment = "neutral";
-  else if (recentPosts.length > 5 && highEngagement.length > 3) sentiment = "bullish";
-  else if (totalPosts < 5 && totalNews < 3) sentiment = "bearish";
+  // Sentiment from title analysis
+  const allTitles = [...reddit, ...hn, ...news].map(d => d.title);
+  const sentimentResult = analyzeSentiment(allTitles);
+  
+  let sentiment = sentimentResult.label;
+  // Override with engagement signals if sentiment is weak
+  if (sentimentResult.confidence < 0.2) {
+    if (recentPosts.length > 5 && highEngagement.length > 3) sentiment = "bullish";
+    else if (totalPosts < 5 && totalNews < 3) sentiment = "bearish";
+    else sentiment = "neutral";
+  }
 
   // Generate summary
   const topDiscussion = [...reddit, ...hn].sort((a, b) => (b.score + b.comments) - (a.score + a.comments))[0];

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -38,6 +38,11 @@ function CompareContent() {
   const handleCompare = async () => {
     if (!topicA.trim() || !topicB.trim()) return;
     setLoading(true);
+    // Update URL for shareable links
+    const url = new URL(window.location.href);
+    url.searchParams.set("a", topicA.trim());
+    url.searchParams.set("b", topicB.trim());
+    window.history.replaceState({}, "", url.toString());
     try {
       const [resA, resB] = await Promise.all([
         fetch("/api/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic: topicA }) }),
@@ -49,6 +54,11 @@ function CompareContent() {
       setLoading(false);
     }
   };
+
+  // Auto-compare if URL params present
+  useEffect(() => {
+    if (topicA && topicB && !dataA && !dataB) handleCompare();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const totalSources = (d: CompareData) => d.sources.reddit + d.sources.hn + d.sources.news;
   const totalEngagement = (d: CompareData) => d.discussions.reduce((s: number, x: any) => s + (x.score || 0) + (x.comments || 0), 0);

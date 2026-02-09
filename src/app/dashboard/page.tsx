@@ -81,6 +81,28 @@ function DashboardContent() {
     }
   }, [topic]);
 
+  // Save to history when data loads
+  useEffect(() => {
+    if (data && topic) {
+      try {
+        const stored = localStorage.getItem("pulseboard-history");
+        const history = stored ? JSON.parse(stored) : [];
+        // Don't duplicate recent same-topic entries
+        const recent = history[0];
+        if (!recent || recent.topic !== topic || Date.now() - new Date(recent.timestamp).getTime() > 60000) {
+          const entry = {
+            topic,
+            timestamp: new Date().toISOString(),
+            sentiment: data.sentiment,
+            sources: data.sources.reddit + data.sources.hn + data.sources.news,
+          };
+          const updated = [entry, ...history.filter((h: any) => h.topic !== topic)].slice(0, 50);
+          localStorage.setItem("pulseboard-history", JSON.stringify(updated));
+        }
+      } catch {}
+    }
+  }, [data, topic]);
+
   useEffect(() => { analyze(); }, [analyze]);
 
   // Auto-refresh every 5 minutes

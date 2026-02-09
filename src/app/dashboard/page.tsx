@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { StatCard } from "@/components/EngagementBar";
 
 interface AnalysisData {
   topic: string;
@@ -169,6 +170,24 @@ function DashboardContent() {
         <div className="mb-6 p-4 rounded-lg bg-[var(--color-bearish)]/10 border border-[var(--color-bearish)]/30 text-[var(--color-bearish)]">
           {error}
         </div>
+      )}
+
+      {/* Stats row */}
+      {data && !loading && (
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }} 
+          animate={{ opacity: 1, y: 0 }}
+          className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6"
+        >
+          <StatCard label="Total Sources" value={data.sources.reddit + data.sources.hn + data.sources.news} />
+          <StatCard label="Discussions" value={data.discussions.length} subtext={`${data.sources.hn} from HN`} />
+          <StatCard label="News Articles" value={data.sources.news} subtext="Google News" />
+          <StatCard 
+            label="Engagement" 
+            value={data.discussions.reduce((s: number, d: any) => s + (d.score || 0) + (d.comments || 0), 0)} 
+            subtext="upvotes + comments" 
+          />
+        </motion.div>
       )}
 
       {loading ? (

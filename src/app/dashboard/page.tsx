@@ -16,6 +16,7 @@ interface AnalysisData {
   predictions: { prediction: string; confidence: string; reasoning: string }[];
   discussions: { title: string; url: string; score: number; comments: number; author: string; source: string; timeAgo: string; subreddit?: string }[];
   news: { title: string; url: string; source: string; pubDate: string }[];
+  keywords?: { word: string; count: number; relevance: number }[];
   sources: { reddit: number; hn: number; news: number };
 }
 
@@ -291,6 +292,29 @@ function DashboardContent() {
               {(!data.controversies || data.controversies.length === 0) && <p className="text-sm text-[var(--color-text-secondary)]">No major controversies detected.</p>}
             </div>
           </Card>
+
+          {/* Related Keywords */}
+          {data.keywords && data.keywords.length > 0 && (
+            <Card delay={0.28}>
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-text-secondary)] mb-3">Related Topics</h2>
+              <div className="flex flex-wrap gap-2">
+                {data.keywords.slice(0, 15).map((kw, i) => (
+                  <button
+                    key={i}
+                    onClick={() => router.push(`/dashboard?topic=${encodeURIComponent(kw.word)}`)}
+                    className="px-2.5 py-1 rounded-full border border-[var(--color-border)] hover:border-[var(--color-accent)] hover:text-white transition-colors text-[var(--color-text-secondary)]"
+                    style={{ 
+                      fontSize: `${Math.max(11, Math.min(18, 11 + kw.relevance * 7))}px`,
+                      opacity: 0.5 + kw.relevance * 0.5,
+                    }}
+                  >
+                    {kw.word}
+                    <span className="text-[10px] ml-1 font-mono opacity-60">{kw.count}</span>
+                  </button>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {/* Predicted Next Moves — Full Width */}
           <Card className="md:col-span-2" delay={0.3}>

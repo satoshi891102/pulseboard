@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchReddit, fetchHN, fetchGoogleNews, type Discussion, type NewsItem } from "@/lib/sources";
+import { extractKeywords } from "@/lib/wordcloud";
 
 interface CacheEntry {
   data: any;
@@ -150,6 +151,13 @@ export async function POST(req: NextRequest) {
     // Generate intelligent analysis from the data itself
     const aiAnalysis = generateAnalysis(topic, reddit, hn, news);
 
+    // Extract keywords from all titles
+    const allTexts = [
+      ...discussions.map(d => d.title),
+      ...news.map(n => n.title),
+    ];
+    const keywords = extractKeywords(allTexts, topic);
+
     const result = {
       topic,
       timestamp: new Date().toISOString(),
@@ -160,6 +168,7 @@ export async function POST(req: NextRequest) {
       predictions: aiAnalysis.predictions || [],
       discussions: discussions.slice(0, 20),
       news,
+      keywords,
       sources: {
         reddit: reddit.length,
         hn: hn.length,

@@ -11,6 +11,7 @@ export const metadata: Metadata = {
     type: "website",
     url: "https://pulseboard-one.vercel.app",
     siteName: "PulseBoard",
+    images: [{ url: "/api/og", width: 1200, height: 630 }],
   },
   twitter: {
     card: "summary_large_image",

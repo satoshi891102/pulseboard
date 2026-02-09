@@ -40,15 +40,25 @@ function GridBackground() {
   );
 }
 
+interface TrendingItem {
+  title: string;
+  source: string;
+  score: number;
+  url: string;
+}
+
 export default function Home() {
   const [query, setQuery] = useState("");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [trending, setTrending] = useState<TrendingItem[]>([]);
   const router = useRouter();
 
   useEffect(() => {
     const stored = localStorage.getItem("pulseboard-recent");
     if (stored) setRecentSearches(JSON.parse(stored));
+    // Fetch trending
+    fetch("/api/trending").then(r => r.json()).then(setTrending).catch(() => {});
   }, []);
 
   // Keyboard shortcut
@@ -222,6 +232,48 @@ export default function Home() {
             AI Analysis
           </div>
         </motion.div>
+
+        {/* Trending Now */}
+        {trending.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="mt-16"
+          >
+            <h2 className="text-center text-sm font-semibold uppercase tracking-wider text-[var(--color-text-secondary)] mb-6">Trending Now</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {trending.slice(0, 8).map((item, i) => (
+                <motion.button
+                  key={i}
+                  initial={{ opacity: 0, x: i % 2 === 0 ? -10 : 10 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.05 }}
+                  onClick={() => {
+                    // Extract a searchable term from the title (first 3-4 meaningful words)
+                    const words = item.title.split(/\s+/).slice(0, 4).join(" ");
+                    handleSearch(words);
+                  }}
+                  className="text-left p-3 rounded-lg bg-[var(--color-card)] border border-[var(--color-border)] hover:border-[var(--color-accent)] transition-colors group"
+                >
+                  <div className="flex items-start gap-2">
+                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded mt-0.5 ${item.source === "hn" ? "bg-orange-500/20 text-orange-400" : "bg-blue-500/20 text-blue-400"}`}>
+                      {item.source === "hn" ? "HN" : "NEWS"}
+                    </span>
+                    <span className="text-sm text-[var(--color-text-secondary)] group-hover:text-white transition-colors line-clamp-2">
+                      {item.title}
+                    </span>
+                  </div>
+                  {item.score > 0 && (
+                    <span className="text-xs text-[var(--color-text-secondary)] font-mono ml-6">↑{item.score}</span>
+                  )}
+                </motion.button>
+              ))}
+            </div>
+          </motion.div>
+        )}
 
         <div className="text-center mt-8">
           <Link 

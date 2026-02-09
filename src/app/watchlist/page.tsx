@@ -10,6 +10,8 @@ interface WatchItem {
   addedAt: string;
   lastPulseScore?: number;
   lastSentiment?: string;
+  previousScore?: number;
+  lastRefreshed?: string;
 }
 
 export default function WatchlistPage() {
@@ -53,8 +55,10 @@ export default function WatchlistPage() {
         const updated = [...items];
         updated[index] = {
           ...item,
+          previousScore: item.lastPulseScore,
           lastPulseScore: data.pulseScore,
           lastSentiment: data.sentiment,
+          lastRefreshed: new Date().toISOString(),
         };
         save(updated);
       }
@@ -138,12 +142,19 @@ export default function WatchlistPage() {
                 onClick={() => router.push(`/dashboard?topic=${encodeURIComponent(item.topic)}`)}
                 className="flex items-center gap-4 flex-1 text-left"
               >
-                {/* Pulse Score */}
-                <div className="w-10 h-10 flex items-center justify-center">
+                {/* Pulse Score with change */}
+                <div className="w-14 flex flex-col items-center justify-center">
                   {item.lastPulseScore !== undefined ? (
-                    <span className="text-lg font-bold font-mono" style={{ color: scoreColor(item.lastPulseScore) }}>
-                      {item.lastPulseScore}
-                    </span>
+                    <>
+                      <span className="text-lg font-bold font-mono" style={{ color: scoreColor(item.lastPulseScore) }}>
+                        {item.lastPulseScore}
+                      </span>
+                      {item.previousScore !== undefined && item.previousScore !== item.lastPulseScore && (
+                        <span className={`text-[10px] font-mono ${item.lastPulseScore > item.previousScore ? "text-[var(--color-bullish)]" : "text-[var(--color-bearish)]"}`}>
+                          {item.lastPulseScore > item.previousScore ? "↑" : "↓"}{Math.abs(item.lastPulseScore - item.previousScore)}
+                        </span>
+                      )}
+                    </>
                   ) : (
                     <span className="text-sm text-[var(--color-text-secondary)]">—</span>
                   )}

@@ -275,6 +275,44 @@ function DashboardContent() {
         </motion.div>
       )}
 
+      {/* Source Breakdown Bar */}
+      {data && !loading && (
+        <motion.div 
+          initial={{ opacity: 0 }} 
+          animate={{ opacity: 1 }}
+          className="mb-4"
+        >
+          <div className="flex h-2 rounded-full overflow-hidden gap-0.5">
+            {data.sources.hn > 0 && (
+              <div 
+                className="bg-orange-500 rounded-full transition-all duration-500" 
+                style={{ flex: data.sources.hn }}
+                title={`Hacker News: ${data.sources.hn}`}
+              />
+            )}
+            {data.sources.reddit > 0 && (
+              <div 
+                className="bg-blue-500 rounded-full transition-all duration-500" 
+                style={{ flex: data.sources.reddit }}
+                title={`Reddit: ${data.sources.reddit}`}
+              />
+            )}
+            {data.sources.news > 0 && (
+              <div 
+                className="bg-emerald-500 rounded-full transition-all duration-500" 
+                style={{ flex: data.sources.news }}
+                title={`News: ${data.sources.news}`}
+              />
+            )}
+          </div>
+          <div className="flex justify-between mt-1 text-[10px] text-[var(--color-text-secondary)] font-mono">
+            {data.sources.hn > 0 && <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-orange-500" />HN {data.sources.hn}</span>}
+            {data.sources.reddit > 0 && <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-500" />Reddit {data.sources.reddit}</span>}
+            {data.sources.news > 0 && <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />News {data.sources.news}</span>}
+          </div>
+        </motion.div>
+      )}
+
       {/* Activity Timeline */}
       {data && !loading && data.discussions.length > 0 && (
         <motion.div 

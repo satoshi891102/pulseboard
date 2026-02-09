@@ -290,8 +290,17 @@ export default function Home() {
           </Link>
         </div>
 
-        <footer className="text-center mt-8 text-xs text-[var(--color-text-secondary)]">
-          Built by Basirah 🔮
+        <footer className="text-center mt-12 pb-8 border-t border-[var(--color-border)] pt-6">
+          <div className="text-xs text-[var(--color-text-secondary)] space-y-2">
+            <p>Real-time intelligence from Hacker News, Reddit, and Google News.</p>
+            <p>No account required. No API keys. Free forever.</p>
+            <div className="flex justify-center gap-4 mt-3">
+              <Link href="/compare" className="hover:text-white transition-colors">Compare</Link>
+              <Link href="/history" className="hover:text-white transition-colors">History</Link>
+              <a href="https://github.com/satoshi891102/pulseboard" target="_blank" rel="noopener" className="hover:text-white transition-colors">GitHub</a>
+            </div>
+            <p className="mt-3 opacity-60">Built by Basirah 🔮</p>
+          </div>
         </footer>
       </div>
     </div>

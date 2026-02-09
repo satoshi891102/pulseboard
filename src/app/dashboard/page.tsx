@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { StatCard } from "@/components/EngagementBar";
+import { ActivityTimeline } from "@/components/ActivityTimeline";
 
 interface AnalysisData {
   topic: string;
@@ -253,6 +254,18 @@ function DashboardContent() {
             value={data.discussions.reduce((s: number, d: any) => s + (d.score || 0) + (d.comments || 0), 0)} 
             subtext="upvotes + comments" 
           />
+        </motion.div>
+      )}
+
+      {/* Activity Timeline */}
+      {data && !loading && data.discussions.length > 0 && (
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }} 
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4 mb-6"
+        >
+          <ActivityTimeline discussions={data.discussions} />
         </motion.div>
       )}
 

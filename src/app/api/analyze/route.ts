@@ -20,7 +20,8 @@ function generateAnalysis(topic: string, reddit: Discussion[], hn: Discussion[],
   const recentPosts = [...reddit, ...hn].filter(d => d.timeAgo.includes("m ago") || d.timeAgo.includes("1h ago") || d.timeAgo.includes("2h ago"));
   
   let sentiment = "neutral";
-  if (recentPosts.length > 5 && highEngagement.length > 3) sentiment = "bullish";
+  if (totalPosts === 0 && totalNews === 0) sentiment = "neutral";
+  else if (recentPosts.length > 5 && highEngagement.length > 3) sentiment = "bullish";
   else if (totalPosts < 5 && totalNews < 3) sentiment = "bearish";
 
   // Generate summary

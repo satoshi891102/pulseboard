@@ -166,9 +166,26 @@ export async function POST(req: NextRequest) {
     ];
     const keywords = extractKeywords(allTexts, topic);
 
+    // Calculate Pulse Score (0-100)
+    const totalSources = reddit.length + hn.length + news.length;
+    const totalEng = discussions.reduce((s, d) => s + d.score + d.comments, 0);
+    const recentCount = discussions.filter(d => {
+      const m = d.timeAgo.match(/(\d+)\s*(m|h)\s*ago/i);
+      if (!m) return false;
+      const hours = m[2] === "m" ? parseInt(m[1]) / 60 : parseInt(m[1]);
+      return hours < 6;
+    }).length;
+    
+    const sourceScore = Math.min(totalSources / 40, 1) * 30;        // 0-30
+    const engScore = Math.min(totalEng / 5000, 1) * 30;              // 0-30
+    const recencyScore = Math.min(recentCount / 10, 1) * 25;         // 0-25
+    const diversityScore = (reddit.length > 0 ? 5 : 0) + (hn.length > 0 ? 5 : 0) + (news.length > 0 ? 5 : 0); // 0-15
+    const pulseScore = Math.round(sourceScore + engScore + recencyScore + diversityScore);
+
     const result = {
       topic,
       timestamp: new Date().toISOString(),
+      pulseScore,
       summary: aiAnalysis.summary,
       sentiment: aiAnalysis.sentiment,
       keyVoices: aiAnalysis.keyVoices || [],

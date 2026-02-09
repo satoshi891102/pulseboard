@@ -18,6 +18,7 @@ interface AnalysisData {
   discussions: { title: string; url: string; score: number; comments: number; author: string; source: string; timeAgo: string; subreddit?: string }[];
   news: { title: string; url: string; source: string; pubDate: string }[];
   keywords?: { word: string; count: number; relevance: number }[];
+  pulseScore?: number;
   sources: { reddit: number; hn: number; news: number };
 }
 
@@ -176,6 +177,23 @@ function DashboardContent() {
             </Link>
             <div className="h-4 w-px bg-[var(--color-border)]" />
             <h1 className="text-2xl font-bold">{topic}</h1>
+            {data?.pulseScore !== undefined && (
+              <div className="flex items-center gap-1" title={`Pulse Score: ${data.pulseScore}/100`}>
+                <div className="relative w-9 h-9">
+                  <svg className="w-9 h-9 -rotate-90" viewBox="0 0 36 36">
+                    <circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-border)" strokeWidth="2.5" />
+                    <circle 
+                      cx="18" cy="18" r="15" fill="none" 
+                      stroke={data.pulseScore >= 70 ? "var(--color-accent)" : data.pulseScore >= 40 ? "#f59e0b" : "var(--color-bearish)"}
+                      strokeWidth="2.5" 
+                      strokeDasharray={`${data.pulseScore * 0.942} 94.2`}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold font-mono">{data.pulseScore}</span>
+                </div>
+              </div>
+            )}
             {data && <SentimentBadge sentiment={data.sentiment} />}
             {data && (
               <span className="text-xs text-[var(--color-text-secondary)] font-mono bg-[var(--color-card)] px-2 py-0.5 rounded-full border border-[var(--color-border)]">

@@ -9,6 +9,7 @@ interface CompareData {
   topic: string;
   summary: string;
   sentiment: string;
+  pulseScore?: number;
   sources: { reddit: number; hn: number; news: number };
   discussions: any[];
   news: any[];
@@ -102,11 +103,24 @@ function CompareContent() {
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
                 <div className="text-2xl font-bold">{topicA}</div>
+                {dataA.pulseScore !== undefined && (
+                  <div className="text-3xl font-bold font-mono mt-1" style={{ color: dataA.pulseScore >= 70 ? "var(--color-accent)" : dataA.pulseScore >= 40 ? "#f59e0b" : "var(--color-bearish)" }}>
+                    {dataA.pulseScore}
+                  </div>
+                )}
                 <SentimentBadge sentiment={dataA.sentiment} />
               </div>
-              <div className="text-[var(--color-text-secondary)] text-sm flex items-center justify-center">vs</div>
+              <div className="text-[var(--color-text-secondary)] text-sm flex flex-col items-center justify-center gap-1">
+                <span>vs</span>
+                <span className="text-[10px] font-mono">pulse score</span>
+              </div>
               <div>
                 <div className="text-2xl font-bold">{topicB}</div>
+                {dataB.pulseScore !== undefined && (
+                  <div className="text-3xl font-bold font-mono mt-1" style={{ color: dataB.pulseScore >= 70 ? "var(--color-accent)" : dataB.pulseScore >= 40 ? "#f59e0b" : "var(--color-bearish)" }}>
+                    {dataB.pulseScore}
+                  </div>
+                )}
                 <SentimentBadge sentiment={dataB.sentiment} />
               </div>
             </div>

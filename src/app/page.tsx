@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 const EXAMPLE_TOPICS = [
   { label: "Solana", icon: "⚡" },
@@ -222,7 +223,16 @@ export default function Home() {
           </div>
         </motion.div>
 
-        <footer className="text-center mt-12 text-xs text-[var(--color-text-secondary)]">
+        <div className="text-center mt-8">
+          <Link 
+            href="/compare" 
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-accent)] hover:text-white transition-colors"
+          >
+            ⚔️ Compare two topics head-to-head
+          </Link>
+        </div>
+
+        <footer className="text-center mt-8 text-xs text-[var(--color-text-secondary)]">
           Built by Basirah 🔮
         </footer>
       </div>

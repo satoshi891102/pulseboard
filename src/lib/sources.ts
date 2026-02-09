@@ -24,32 +24,78 @@ function timeAgo(date: Date): string {
 }
 
 export async function fetchReddit(topic: string): Promise<Discussion[]> {
+  // Try multiple approaches since Reddit blocks serverless IPs
+  const urls = [
+    `https://old.reddit.com/search.json?q=${encodeURIComponent(topic)}&sort=relevance&t=week&limit=25`,
+    `https://www.reddit.com/search.json?q=${encodeURIComponent(topic)}&sort=relevance&t=week&limit=25`,
+  ];
+  
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { 
+        headers: { 
+          "User-Agent": "PulseBoard/1.0 (contact: admin@pulseboard.app; https://pulseboard.vercel.app)",
+          "Accept": "application/json",
+        },
+      });
+      if (!res.ok) continue;
+      const text = await res.text();
+      if (!text.startsWith('{')) continue;
+      const data = JSON.parse(text);
+      const results = (data?.data?.children || []).map((c: any) => ({
+        title: c.data.title,
+        url: `https://reddit.com${c.data.permalink}`,
+        score: c.data.score,
+        comments: c.data.num_comments,
+        author: c.data.author,
+        source: "reddit" as const,
+        timeAgo: timeAgo(new Date(c.data.created_utc * 1000)),
+        subreddit: c.data.subreddit,
+      }));
+      if (results.length > 0) return results;
+    } catch {
+      continue;
+    }
+  }
+  
+  // Fallback: try Reddit RSS and parse what we can
   try {
-    const res = await fetch(
-      `https://www.reddit.com/search.json?q=${encodeURIComponent(topic)}&sort=hot&limit=25`,
+    const rssRes = await fetch(
+      `https://www.reddit.com/search.xml?q=${encodeURIComponent(topic)}&sort=relevance&t=week`,
       { headers: { "User-Agent": "PulseBoard/1.0" } }
     );
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data?.data?.children || []).map((c: any) => ({
-      title: c.data.title,
-      url: `https://reddit.com${c.data.permalink}`,
-      score: c.data.score,
-      comments: c.data.num_comments,
-      author: c.data.author,
-      source: "reddit" as const,
-      timeAgo: timeAgo(new Date(c.data.created_utc * 1000)),
-      subreddit: c.data.subreddit,
-    }));
-  } catch {
-    return [];
-  }
+    if (rssRes.ok) {
+      const xml = await rssRes.text();
+      const entries: Discussion[] = [];
+      const entryRegex = /<entry>([\s\S]*?)<\/entry>/g;
+      let match;
+      while ((match = entryRegex.exec(xml)) !== null && entries.length < 25) {
+        const entry = match[1];
+        const title = entry.match(/<title>([\s\S]*?)<\/title>/)?.[1] || "";
+        const link = entry.match(/<link href="([^"]+)"/)?.[1] || "";
+        const author = entry.match(/<name>\/u\/([^<]+)<\/name>/)?.[1] || "unknown";
+        const updated = entry.match(/<updated>([^<]+)<\/updated>/)?.[1];
+        entries.push({
+          title: title.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">"),
+          url: link,
+          score: 0,
+          comments: 0,
+          author,
+          source: "reddit",
+          timeAgo: updated ? timeAgo(new Date(updated)) : "recently",
+        });
+      }
+      if (entries.length > 0) return entries;
+    }
+  } catch {}
+  
+  return [];
 }
 
 export async function fetchHN(topic: string): Promise<Discussion[]> {
   try {
     const res = await fetch(
-      `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(topic)}&tags=story&hitsPerPage=20`
+      `https://hn.algolia.com/api/v1/search_by_date?query=${encodeURIComponent(topic)}&tags=story&hitsPerPage=20&numericFilters=points>5`
     );
     if (!res.ok) return [];
     const data = await res.json();
@@ -70,7 +116,8 @@ export async function fetchHN(topic: string): Promise<Discussion[]> {
 export async function fetchGoogleNews(topic: string): Promise<NewsItem[]> {
   try {
     const res = await fetch(
-      `https://news.google.com/rss/search?q=${encodeURIComponent(topic)}&hl=en-US&gl=US&ceid=US:en`
+      `https://news.google.com/rss/search?q=${encodeURIComponent(topic)}&hl=en-US&gl=US&ceid=US:en`,
+      { next: { revalidate: 300 } }
     );
     if (!res.ok) return [];
     const xml = await res.text();

@@ -4,7 +4,16 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 
-const EXAMPLE_TOPICS = ["Solana", "AI Agents", "YC S26", "Bitcoin ETF", "OpenAI", "South Africa Economy"];
+const EXAMPLE_TOPICS = [
+  { label: "Solana", icon: "⚡" },
+  { label: "AI Agents", icon: "🤖" },
+  { label: "YC S26", icon: "🚀" },
+  { label: "Bitcoin ETF", icon: "₿" },
+  { label: "OpenAI", icon: "🧠" },
+  { label: "Trump Tariffs", icon: "🏛️" },
+  { label: "South Africa Economy", icon: "🌍" },
+  { label: "Tesla", icon: "⚡" },
+];
 
 export default function Home() {
   const [query, setQuery] = useState("");
@@ -50,8 +59,9 @@ export default function Home() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Enter any topic..."
-            className="flex-1 px-4 py-3 rounded-lg bg-[var(--color-card)] border border-[var(--color-border)] text-white placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+            placeholder="Enter any topic... (press ⌘K to focus)"
+            autoFocus
+            className="flex-1 px-4 py-3 rounded-lg bg-[var(--color-card)] border border-[var(--color-border)] text-white placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent)]/50 transition-all"
           />
           <button
             type="submit"
@@ -64,11 +74,11 @@ export default function Home() {
         <div className="flex flex-wrap justify-center gap-2 mb-8">
           {EXAMPLE_TOPICS.map((topic) => (
             <button
-              key={topic}
-              onClick={() => handleSearch(topic)}
-              className="px-3 py-1.5 rounded-full text-sm border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-accent)] hover:text-white transition-colors"
+              key={topic.label}
+              onClick={() => handleSearch(topic.label)}
+              className="px-3 py-1.5 rounded-full text-sm border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-accent)] hover:text-white transition-colors flex items-center gap-1.5"
             >
-              {topic}
+              <span>{topic.icon}</span> {topic.label}
             </button>
           ))}
         </div>
@@ -87,7 +97,37 @@ export default function Home() {
             ))}
           </div>
         )}
+
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.8, duration: 0.6 }}
+          className="mt-12 flex flex-col items-center gap-4"
+        >
+          <div className="flex items-center gap-6 text-xs text-[var(--color-text-secondary)]">
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+              Reddit
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-300" />
+              Hacker News
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+              Google News
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)]" />
+              AI Analysis
+            </div>
+          </div>
+        </motion.div>
       </motion.div>
+
+      <footer className="absolute bottom-4 text-xs text-[var(--color-text-secondary)]">
+        Built by Basirah 🔮
+      </footer>
     </div>
   );
 }

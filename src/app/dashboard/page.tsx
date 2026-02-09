@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
 
@@ -53,10 +53,12 @@ function Card({ children, className = "", delay = 0 }: { children: React.ReactNo
 
 function DashboardContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const topic = searchParams.get("topic") || "";
   const [data, setData] = useState<AnalysisData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [newSearch, setNewSearch] = useState("");
 
   const analyze = useCallback(async () => {
     if (!topic) return;
@@ -79,6 +81,22 @@ function DashboardContent() {
 
   useEffect(() => { analyze(); }, [analyze]);
 
+  // Auto-refresh every 5 minutes
+  useEffect(() => {
+    const interval = setInterval(analyze, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [analyze]);
+
+  const handleShare = () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      navigator.share({ title: `PulseBoard: ${topic}`, url });
+    } else {
+      navigator.clipboard.writeText(url);
+      alert("Link copied to clipboard!");
+    }
+  };
+
   if (!topic) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -90,28 +108,61 @@ function DashboardContent() {
   return (
     <div className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto">
       {/* Top Bar */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Link href="/" className="text-[var(--color-text-secondary)] hover:text-white transition-colors">
-            ← Back
-          </Link>
-          <h1 className="text-2xl font-bold">{topic}</h1>
-          {data && <SentimentBadge sentiment={data.sentiment} />}
+      <div className="flex flex-col gap-4 mb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link href="/" className="text-[var(--color-text-secondary)] hover:text-white transition-colors text-sm">
+              ← Back
+            </Link>
+            <div className="h-4 w-px bg-[var(--color-border)]" />
+            <h1 className="text-2xl font-bold">{topic}</h1>
+            {data && <SentimentBadge sentiment={data.sentiment} />}
+            {data && (
+              <span className="text-xs text-[var(--color-text-secondary)] font-mono bg-[var(--color-card)] px-2 py-0.5 rounded-full border border-[var(--color-border)]">
+                {data.sources.reddit + data.sources.hn + data.sources.news} sources
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {data && (
+              <span className="text-xs text-[var(--color-text-secondary)] font-mono hidden md:block">
+                Updated {new Date(data.timestamp).toLocaleTimeString()}
+              </span>
+            )}
+            <button
+              onClick={handleShare}
+              className="px-3 py-1.5 text-sm rounded-lg border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-white transition-colors"
+            >
+              Share
+            </button>
+            <button
+              onClick={analyze}
+              disabled={loading}
+              className="px-3 py-1.5 text-sm rounded-lg bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white disabled:opacity-50 transition-colors"
+            >
+              {loading ? "Analyzing..." : "Refresh"}
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          {data && (
-            <span className="text-xs text-[var(--color-text-secondary)] font-mono">
-              Updated {new Date(data.timestamp).toLocaleTimeString()}
-            </span>
-          )}
+        {/* Inline new search */}
+        <form
+          onSubmit={(e) => { e.preventDefault(); if (newSearch.trim()) router.push(`/dashboard?topic=${encodeURIComponent(newSearch.trim())}`); }}
+          className="flex gap-2"
+        >
+          <input
+            type="text"
+            value={newSearch}
+            onChange={(e) => setNewSearch(e.target.value)}
+            placeholder="Search another topic..."
+            className="flex-1 px-3 py-2 text-sm rounded-lg bg-[var(--color-card)] border border-[var(--color-border)] text-white placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+          />
           <button
-            onClick={analyze}
-            disabled={loading}
-            className="px-3 py-1.5 text-sm rounded-lg bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white disabled:opacity-50 transition-colors"
+            type="submit"
+            className="px-4 py-2 text-sm rounded-lg border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-accent)] hover:text-white transition-colors"
           >
-            {loading ? "Analyzing..." : "Refresh"}
+            Go
           </button>
-        </div>
+        </form>
       </div>
 
       {error && (
@@ -139,9 +190,9 @@ function DashboardContent() {
             </div>
             <p className="text-lg leading-relaxed">{data.summary}</p>
             <div className="mt-3 flex gap-4 text-xs text-[var(--color-text-secondary)] font-mono">
-              <span>Reddit: {data.sources.reddit}</span>
-              <span>HN: {data.sources.hn}</span>
-              <span>News: {data.sources.news}</span>
+              {data.sources.reddit > 0 && <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-orange-500" />Reddit: {data.sources.reddit}</span>}
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-orange-300" />HN: {data.sources.hn}</span>
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-400" />News: {data.sources.news}</span>
             </div>
           </Card>
 

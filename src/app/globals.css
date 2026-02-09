@@ -40,3 +40,24 @@ body {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-secondary);
+}
+
+/* Selection */
+::selection {
+  background: rgba(124, 58, 237, 0.3);
+  color: white;
+}

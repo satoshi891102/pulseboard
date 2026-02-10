@@ -12,14 +12,14 @@ interface AnalysisData {
   timestamp: string;
   summary: string;
   sentiment: string;
-  keyVoices: { name: string; platform: string; stance: string; quote: string }[];
+  keyVoices: { name: string; platform: string; stance: string; quote: string; timeAgo?: string }[];
   controversies: { bull: string; bear: string; topic: string }[];
   predictions: { prediction: string; confidence: string; reasoning: string }[];
-  discussions: { title: string; url: string; score: number; comments: number; author: string; source: string; timeAgo: string; subreddit?: string }[];
-  news: { title: string; url: string; source: string; pubDate: string }[];
+  discussions: { title: string; url: string; score: number; comments: number; author: string; source: string; timeAgo: string; subreddit?: string; freshness?: string; timestamp?: number }[];
+  news: { title: string; url: string; source: string; pubDate: string; freshness?: string }[];
   keywords?: { word: string; count: number; relevance: number }[];
   pulseScore?: number;
-  sources: { reddit: number; hn: number; news: number };
+  sources: { reddit: number; hn: number; x?: number; lobsters?: number; news: number };
 }
 
 const fadeIn = {
@@ -197,7 +197,7 @@ function DashboardContent() {
             {data && <SentimentBadge sentiment={data.sentiment} />}
             {data && (
               <span className="text-xs text-[var(--color-text-secondary)] font-mono bg-[var(--color-card)] px-2 py-0.5 rounded-full border border-[var(--color-border)]">
-                {data.sources.reddit + data.sources.hn + data.sources.news} sources
+                {data.sources.reddit + data.sources.hn + (data.sources.x || 0) + (data.sources.lobsters || 0) + data.sources.news} sources
               </span>
             )}
           </div>
@@ -283,8 +283,8 @@ function DashboardContent() {
           animate={{ opacity: 1, y: 0 }}
           className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6"
         >
-          <StatCard label="Total Sources" value={data.sources.reddit + data.sources.hn + data.sources.news} />
-          <StatCard label="Discussions" value={data.discussions.length} subtext={`${data.sources.hn} from HN`} />
+          <StatCard label="Total Sources" value={data.sources.reddit + data.sources.hn + (data.sources.x || 0) + (data.sources.lobsters || 0) + data.sources.news} />
+          <StatCard label="Discussions" value={data.discussions.length} subtext={`${data.discussions.filter((d: any) => d.freshness === "live" || d.freshness === "recent").length} fresh`} />
           <StatCard label="News Articles" value={data.sources.news} subtext="Google News" />
           <StatCard 
             label="Engagement" 
@@ -302,31 +302,17 @@ function DashboardContent() {
           className="mb-4"
         >
           <div className="flex h-2 rounded-full overflow-hidden gap-0.5">
-            {data.sources.hn > 0 && (
-              <div 
-                className="bg-orange-500 rounded-full transition-all duration-500" 
-                style={{ flex: data.sources.hn }}
-                title={`Hacker News: ${data.sources.hn}`}
-              />
-            )}
-            {data.sources.reddit > 0 && (
-              <div 
-                className="bg-blue-500 rounded-full transition-all duration-500" 
-                style={{ flex: data.sources.reddit }}
-                title={`Reddit: ${data.sources.reddit}`}
-              />
-            )}
-            {data.sources.news > 0 && (
-              <div 
-                className="bg-emerald-500 rounded-full transition-all duration-500" 
-                style={{ flex: data.sources.news }}
-                title={`News: ${data.sources.news}`}
-              />
-            )}
+            {data.sources.hn > 0 && <div className="bg-orange-500 rounded-full transition-all duration-500" style={{ flex: data.sources.hn }} title={`Hacker News: ${data.sources.hn}`} />}
+            {data.sources.reddit > 0 && <div className="bg-blue-500 rounded-full transition-all duration-500" style={{ flex: data.sources.reddit }} title={`Reddit: ${data.sources.reddit}`} />}
+            {(data.sources.x || 0) > 0 && <div className="bg-gray-400 rounded-full transition-all duration-500" style={{ flex: data.sources.x }} title={`X: ${data.sources.x}`} />}
+            {(data.sources.lobsters || 0) > 0 && <div className="bg-rose-500 rounded-full transition-all duration-500" style={{ flex: data.sources.lobsters }} title={`Lobsters: ${data.sources.lobsters}`} />}
+            {data.sources.news > 0 && <div className="bg-emerald-500 rounded-full transition-all duration-500" style={{ flex: data.sources.news }} title={`News: ${data.sources.news}`} />}
           </div>
-          <div className="flex justify-between mt-1 text-[10px] text-[var(--color-text-secondary)] font-mono">
+          <div className="flex flex-wrap gap-3 mt-1 text-[10px] text-[var(--color-text-secondary)] font-mono">
             {data.sources.hn > 0 && <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-orange-500" />HN {data.sources.hn}</span>}
             {data.sources.reddit > 0 && <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-500" />Reddit {data.sources.reddit}</span>}
+            {(data.sources.x || 0) > 0 && <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-gray-400" />X {data.sources.x}</span>}
+            {(data.sources.lobsters || 0) > 0 && <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-rose-500" />Lobsters {data.sources.lobsters}</span>}
             {data.sources.news > 0 && <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />News {data.sources.news}</span>}
           </div>
         </motion.div>
@@ -362,10 +348,12 @@ function DashboardContent() {
               <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">Narrative Summary</h2>
             </div>
             <p className="text-lg leading-relaxed">{data.summary}</p>
-            <div className="mt-3 flex gap-4 text-xs text-[var(--color-text-secondary)] font-mono">
-              {data.sources.reddit > 0 && <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-orange-500" />Reddit: {data.sources.reddit}</span>}
-              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-orange-300" />HN: {data.sources.hn}</span>
-              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-400" />News: {data.sources.news}</span>
+            <div className="mt-3 flex flex-wrap gap-3 text-xs text-[var(--color-text-secondary)] font-mono">
+              {data.sources.hn > 0 && <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-orange-500" />HN: {data.sources.hn}</span>}
+              {data.sources.reddit > 0 && <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-500" />Reddit: {data.sources.reddit}</span>}
+              {(data.sources.x || 0) > 0 && <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-gray-400" />X: {data.sources.x}</span>}
+              {(data.sources.lobsters || 0) > 0 && <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-rose-500" />Lobsters: {data.sources.lobsters}</span>}
+              {data.sources.news > 0 && <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />News: {data.sources.news}</span>}
             </div>
           </Card>
 
@@ -373,21 +361,27 @@ function DashboardContent() {
           <Card delay={0.1}>
             <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-text-secondary)] mb-3">Trending Discussions</h2>
             <div className="space-y-3 max-h-80 overflow-y-auto">
-              {data.discussions.slice(0, 10).map((d, i) => (
-                <a key={i} href={d.url} target="_blank" rel="noopener noreferrer" className="block group">
-                  <div className="flex items-start gap-2">
-                    <span className={`text-xs font-mono px-1.5 py-0.5 rounded ${d.source === "reddit" ? "bg-orange-500/20 text-orange-400" : "bg-orange-300/20 text-orange-300"}`}>
-                      {d.source === "reddit" ? "R" : "HN"}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm group-hover:text-[var(--color-accent)] transition-colors truncate">{d.title}</p>
-                      <p className="text-xs text-[var(--color-text-secondary)] font-mono">
-                        ↑{d.score} · {d.comments} comments · {d.timeAgo}
-                      </p>
+              {data.discussions.slice(0, 12).map((d, i) => {
+                const srcStyle = d.source === "reddit" ? "bg-blue-500/20 text-blue-400" : d.source === "hn" ? "bg-orange-500/20 text-orange-400" : d.source === "x" ? "bg-gray-500/20 text-gray-300" : d.source === "lobsters" ? "bg-rose-500/20 text-rose-400" : "bg-purple-500/20 text-purple-400";
+                const srcLabel = d.source === "reddit" ? "R" : d.source === "hn" ? "HN" : d.source === "x" ? "X" : d.source === "lobsters" ? "L" : "?";
+                const freshColor = d.freshness === "live" ? "bg-green-400" : d.freshness === "recent" ? "bg-yellow-400" : d.freshness === "aging" ? "bg-orange-400" : "bg-red-400";
+                return (
+                  <a key={i} href={d.url} target="_blank" rel="noopener noreferrer" className="block group">
+                    <div className="flex items-start gap-2">
+                      <span className={`text-xs font-mono px-1.5 py-0.5 rounded shrink-0 ${srcStyle}`}>{srcLabel}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm group-hover:text-[var(--color-accent)] transition-colors line-clamp-2">{d.title}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className={`w-1.5 h-1.5 rounded-full ${freshColor}`} title={d.freshness || "unknown"} />
+                          <p className="text-xs text-[var(--color-text-secondary)] font-mono">
+                            ↑{d.score} · {d.comments} comments · {d.timeAgo}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </a>
-              ))}
+                  </a>
+                );
+              })}
               {data.discussions.length === 0 && <p className="text-sm text-[var(--color-text-secondary)]">No discussions found.</p>}
             </div>
           </Card>

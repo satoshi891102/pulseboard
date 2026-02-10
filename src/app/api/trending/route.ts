@@ -33,6 +33,22 @@ export async function GET() {
     }
   } catch {}
 
+  // Fetch Lobsters hottest
+  try {
+    const res = await fetch("https://lobste.rs/hottest.json", { signal: AbortSignal.timeout(5000) });
+    if (res.ok) {
+      const data = await res.json();
+      (data || []).slice(0, 8).forEach((h: any) => {
+        topics.push({
+          title: h.title,
+          source: "lobsters",
+          score: h.score || 0,
+          url: h.url || h.short_id_url || "",
+        });
+      });
+    }
+  } catch {}
+
   // Fetch Google News top stories
   try {
     const res = await fetch("https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en");

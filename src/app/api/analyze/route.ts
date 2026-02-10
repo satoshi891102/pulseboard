@@ -1,133 +1,192 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchReddit, fetchHN, fetchGoogleNews, fetchX, type Discussion, type NewsItem } from "@/lib/sources";
+import {
+  fetchReddit, fetchHN, fetchGoogleNews, fetchX, fetchLobsters,
+  filterRelevant, filterRelevantNews, rankDiscussions, calculatePulseScore,
+  timeDecayScore,
+  type Discussion, type NewsItem,
+} from "@/lib/sources";
 import { extractKeywords } from "@/lib/wordcloud";
 import { analyzeSentiment } from "@/lib/sentiment";
 
-interface CacheEntry {
-  data: any;
-  timestamp: number;
-}
-
+interface CacheEntry { data: any; timestamp: number; }
 const cache = new Map<string, CacheEntry>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 3 * 60 * 1000; // 3 minutes (tighter for freshness)
 
-function generateAnalysis(topic: string, reddit: Discussion[], hn: Discussion[], news: NewsItem[]) {
-  const totalPosts = reddit.length + hn.length;
+function generateAnalysis(
+  topic: string,
+  discussions: Discussion[],
+  news: NewsItem[],
+  sourceCounts: Record<string, number>,
+) {
+  const now = Date.now();
+  const total = discussions.length;
   const totalNews = news.length;
-  const totalEngagement = [...reddit, ...hn].reduce((sum, d) => sum + d.score + d.comments, 0);
-  const avgScore = totalPosts > 0 ? Math.round(totalEngagement / totalPosts) : 0;
+  const totalEngagement = discussions.reduce((s, d) => s + d.score + d.comments, 0);
 
-  // Sentiment heuristic based on engagement patterns and volume
-  const highEngagement = [...reddit, ...hn].filter(d => d.score > 50 || d.comments > 20);
-  const recentPosts = [...reddit, ...hn].filter(d => d.timeAgo.includes("m ago") || d.timeAgo.includes("1h ago") || d.timeAgo.includes("2h ago"));
-  
-  // Sentiment from title analysis
-  const allTitles = [...reddit, ...hn, ...news].map(d => d.title);
+  // Time buckets
+  const last2h = discussions.filter(d => now - d.timestamp < 7200000);
+  const last12h = discussions.filter(d => now - d.timestamp < 43200000);
+  const last48h = discussions.filter(d => now - d.timestamp < 172800000);
+
+  // Sentiment
+  const allTitles = [...discussions, ...news].map(d => d.title);
   const sentimentResult = analyzeSentiment(allTitles);
-  
   let sentiment = sentimentResult.label;
-  // Override with engagement signals if sentiment is weak
-  if (sentimentResult.confidence < 0.2) {
-    if (recentPosts.length > 5 && highEngagement.length > 3) sentiment = "bullish";
-    else if (totalPosts < 5 && totalNews < 3) sentiment = "bearish";
+  if (sentimentResult.confidence < 0.15 && total > 0) {
+    // Use engagement velocity as proxy
+    if (last2h.length > 5) sentiment = "bullish";
+    else if (total < 3) sentiment = "bearish";
     else sentiment = "neutral";
   }
 
-  // Generate summary
-  const topDiscussion = [...reddit, ...hn].sort((a, b) => (b.score + b.comments) - (a.score + a.comments))[0];
-  const topNewsItem = news[0];
-  
-  let summary = `"${topic}" is generating ${totalPosts > 20 ? "significant" : totalPosts > 10 ? "moderate" : "limited"} discussion across platforms with ${totalEngagement.toLocaleString()} total engagement points.`;
-  
-  if (topDiscussion) {
-    summary += ` The top discussion "${topDiscussion.title}" has ${topDiscussion.score} upvotes and ${topDiscussion.comments} comments on ${topDiscussion.source === "reddit" ? "Reddit" : "Hacker News"}.`;
-  }
-  if (topNewsItem) {
-    summary += ` Recent news: "${topNewsItem.title}" via ${topNewsItem.source || "Google News"}.`;
-  }
-  if (recentPosts.length > 3) {
-    summary += ` Activity is ${recentPosts.length > 8 ? "surging" : "picking up"} with ${recentPosts.length} posts in the last few hours.`;
+  // Top items (by time-decay score)
+  const ranked = rankDiscussions(discussions);
+  const top3 = ranked.slice(0, 3);
+
+  // ── Build contextual summary ──────────────
+  const parts: string[] = [];
+
+  // Velocity assessment
+  if (last2h.length >= 5) {
+    parts.push(`"${topic}" is surging right now — ${last2h.length} posts in the last 2 hours across ${Object.values(sourceCounts).filter(v => v > 0).length} platforms.`);
+  } else if (last12h.length >= 5) {
+    parts.push(`"${topic}" has active discussion — ${last12h.length} posts in the last 12 hours.`);
+  } else if (last48h.length >= 3) {
+    parts.push(`"${topic}" has moderate recent activity — ${last48h.length} posts in the last 48 hours.`);
+  } else if (total > 0) {
+    parts.push(`"${topic}" has limited recent discussion — ${total} posts found, mostly older than 48 hours.`);
+  } else {
+    parts.push(`"${topic}" has minimal online discussion right now.`);
   }
 
-  // Extract key voices (top authors by engagement)
-  const authorMap = new Map<string, { score: number; platform: string; title: string }>();
-  [...reddit, ...hn].forEach(d => {
+  // Top discussion highlight
+  if (top3[0]) {
+    const t = top3[0];
+    const eng = t.score + t.comments;
+    const platform = t.source === "hn" ? "Hacker News" : t.source === "reddit" ? `r/${t.subreddit || "Reddit"}` : t.source === "lobsters" ? "Lobsters" : "X";
+    parts.push(`Hottest thread: "${t.title}" on ${platform} (${eng.toLocaleString()} engagement, ${t.timeAgo}).`);
+  }
+
+  // News highlight
+  if (news[0]) {
+    parts.push(`Latest news: "${news[0].title}" via ${news[0].source || "Google News"}.`);
+  }
+
+  // Engagement quality
+  if (totalEngagement > 1000) {
+    parts.push(`Strong engagement: ${totalEngagement.toLocaleString()} total interactions.`);
+  } else if (totalEngagement > 100) {
+    parts.push(`Moderate engagement: ${totalEngagement.toLocaleString()} total interactions.`);
+  }
+
+  const summary = parts.join(" ");
+
+  // ── Key Voices (by time-decay score, not raw score) ──────
+  const authorMap = new Map<string, { decayScore: number; rawScore: number; platform: string; title: string; timeAgo: string }>();
+  discussions.forEach(d => {
+    const ds = timeDecayScore(d.score, d.comments, d.timestamp);
     const existing = authorMap.get(d.author);
-    const total = d.score + d.comments;
-    if (!existing || total > existing.score) {
-      authorMap.set(d.author, { score: total, platform: d.source, title: d.title });
+    if (!existing || ds > existing.decayScore) {
+      authorMap.set(d.author, {
+        decayScore: ds,
+        rawScore: d.score + d.comments,
+        platform: d.source,
+        title: d.title,
+        timeAgo: d.timeAgo,
+      });
     }
   });
+  const avgDecay = discussions.length > 0
+    ? discussions.reduce((s, d) => s + timeDecayScore(d.score, d.comments, d.timestamp), 0) / discussions.length
+    : 0;
   const keyVoices = Array.from(authorMap.entries())
-    .sort((a, b) => b[1].score - a[1].score)
+    .sort((a, b) => b[1].decayScore - a[1].decayScore)
     .slice(0, 5)
     .map(([name, data]) => ({
       name,
       platform: data.platform,
-      stance: data.score > avgScore * 1.5 ? "bullish" : data.score < avgScore * 0.5 ? "bearish" : "neutral",
+      stance: data.decayScore > avgDecay * 2 ? "bullish" : data.decayScore < avgDecay * 0.3 ? "bearish" : "neutral",
       quote: data.title,
+      timeAgo: data.timeAgo,
     }));
 
-  // Generate controversies from subreddit diversity
-  const subreddits = new Map<string, number>();
-  reddit.forEach(d => {
-    if (d.subreddit) subreddits.set(d.subreddit, (subreddits.get(d.subreddit) || 0) + 1);
+  // ── Controversies ──────
+  const controversies: { topic: string; bull: string; bear: string }[] = [];
+
+  // Platform divergence
+  const platformEngagement: Record<string, number[]> = {};
+  discussions.forEach(d => {
+    if (!platformEngagement[d.source]) platformEngagement[d.source] = [];
+    platformEngagement[d.source].push(d.score + d.comments);
   });
-  const topSubs = Array.from(subreddits.entries()).sort((a, b) => b[1] - a[1]).slice(0, 3);
-  
-  const controversies = [];
-  if (topSubs.length >= 2) {
+  const platforms = Object.entries(platformEngagement);
+  if (platforms.length >= 2) {
+    const sorted = platforms.map(([p, scores]) => ({
+      platform: p,
+      avg: scores.reduce((a, b) => a + b, 0) / scores.length,
+      count: scores.length,
+    })).sort((a, b) => b.avg - a.avg);
+    const pName = (s: string) => s === "hn" ? "Hacker News" : s === "reddit" ? "Reddit" : s === "lobsters" ? "Lobsters" : "X";
     controversies.push({
-      topic: `Cross-community interest`,
-      bull: `Active discussion in r/${topSubs[0][0]} (${topSubs[0][1]} posts) shows strong community engagement`,
-      bear: `Discussion spread across ${subreddits.size} subreddits suggests fragmented opinion`,
-    });
-  }
-  if (highEngagement.length > 0 && totalPosts - highEngagement.length > highEngagement.length * 2) {
-    controversies.push({
-      topic: "Engagement disparity",
-      bull: `${highEngagement.length} posts with high engagement indicate focused interest`,
-      bear: `${totalPosts - highEngagement.length} low-engagement posts suggest fading momentum`,
-    });
-  }
-  if (hn.length > 0 && reddit.length > 0) {
-    const hnAvg = hn.reduce((s, d) => s + d.score, 0) / hn.length;
-    const redditAvg = reddit.reduce((s, d) => s + d.score, 0) / reddit.length;
-    controversies.push({
-      topic: "Platform sentiment divergence",
-      bull: redditAvg > hnAvg ? `Reddit community is more engaged (avg ${Math.round(redditAvg)} vs HN ${Math.round(hnAvg)})` : `HN community shows stronger technical interest (avg ${Math.round(hnAvg)} vs Reddit ${Math.round(redditAvg)})`,
-      bear: redditAvg > hnAvg ? `Lower HN engagement may indicate skepticism from technical community` : `Lower Reddit engagement suggests less mainstream appeal`,
+      topic: "Platform divergence",
+      bull: `${pName(sorted[0].platform)} leads with avg ${Math.round(sorted[0].avg)} engagement across ${sorted[0].count} posts`,
+      bear: `${pName(sorted[sorted.length - 1].platform)} shows only ${Math.round(sorted[sorted.length - 1].avg)} avg engagement — possible skepticism`,
     });
   }
 
-  // Generate predictions
-  const predictions = [];
-  if (recentPosts.length > 5) {
-    predictions.push({
-      prediction: `Expect continued high discussion volume over the next 24-48 hours`,
-      confidence: "high",
-      reasoning: `${recentPosts.length} recent posts indicate an active discussion cycle`,
+  // Freshness gap
+  if (last2h.length > 0 && discussions.length > last2h.length * 3) {
+    controversies.push({
+      topic: "Activity spike vs. baseline",
+      bull: `${last2h.length} posts in the last 2 hours suggests a breakout moment`,
+      bear: `Most discussion (${discussions.length - last2h.length} posts) is older — the spike may not sustain`,
     });
   }
+
+  // Subreddit diversity
+  const subs = new Map<string, number>();
+  discussions.filter(d => d.source === "reddit" && d.subreddit).forEach(d => {
+    subs.set(d.subreddit!, (subs.get(d.subreddit!) || 0) + 1);
+  });
+  if (subs.size >= 3) {
+    const topSubs = Array.from(subs.entries()).sort((a, b) => b[1] - a[1]);
+    controversies.push({
+      topic: "Cross-community spread",
+      bull: `Discussion spans ${subs.size} subreddits — broad interest (r/${topSubs[0][0]}, r/${topSubs[1][0]}, r/${topSubs[2][0]})`,
+      bear: `Fragmented across many communities — no single "home base" for the conversation`,
+    });
+  }
+
+  // ── Predictions ──────
+  const predictions: { prediction: string; confidence: string; reasoning: string }[] = [];
+
+  if (last2h.length >= 5) {
+    predictions.push({
+      prediction: `High probability of continued surging activity in the next 6-12 hours`,
+      confidence: "high",
+      reasoning: `${last2h.length} posts in 2 hours indicates an active cycle that typically sustains for 12-24h`,
+    });
+  } else if (last12h.length >= 5 && last2h.length < 3) {
+    predictions.push({
+      prediction: `Discussion likely peaked — expect declining volume unless a new catalyst emerges`,
+      confidence: "medium",
+      reasoning: `Active 12h ago (${last12h.length} posts) but only ${last2h.length} in the last 2h — momentum fading`,
+    });
+  }
+
   if (totalNews > 5) {
     predictions.push({
-      prediction: `Media coverage likely to increase as ${totalNews} outlets are already covering this`,
+      prediction: `Media cycle likely continues — ${totalNews} outlets creates follow-on coverage pressure`,
       confidence: "medium",
-      reasoning: `Multi-outlet coverage often triggers follow-on reporting`,
+      reasoning: `Multi-outlet coverage typically triggers 2-3 more days of reporting`,
     });
   }
-  if (highEngagement.length > 2) {
-    predictions.push({
-      prediction: `Key discussion threads will likely surface more contrarian takes as engagement grows`,
-      confidence: "medium",
-      reasoning: `High-engagement posts (${highEngagement.length} threads) typically attract diverse opinions over time`,
-    });
-  }
+
   if (predictions.length === 0) {
     predictions.push({
-      prediction: `Discussion may remain at current levels unless a catalyst event occurs`,
+      prediction: `Activity will likely stay flat unless driven by a news catalyst`,
       confidence: "low",
-      reasoning: `Current engagement levels are ${totalPosts > 15 ? "moderate" : "limited"} without a clear trend direction`,
+      reasoning: `Current volume (${total} posts, ${last2h.length} fresh) doesn't indicate momentum`,
     });
   }
 
@@ -147,54 +206,43 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(cached.data);
     }
 
-    // Fetch all sources in parallel (including X)
-    const [reddit, hn, news, xPosts] = await Promise.all([
+    // Fetch ALL sources in parallel
+    const [reddit, hn, news, xPosts, lobsters] = await Promise.all([
       fetchReddit(topic),
       fetchHN(topic),
       fetchGoogleNews(topic),
       fetchX(topic),
+      fetchLobsters(topic),
     ]);
 
-    // Strict relevance filter — only keep results that actually mention the topic
-    const topicTerms = topic.toLowerCase().split(/\s+/).filter(t => t.length > 2);
-    const isRelevant = (title: string) => {
-      const lower = title.toLowerCase();
-      return topicTerms.every(term => lower.includes(term));
+    // Relevance filter
+    const filteredReddit = filterRelevant(reddit, topic);
+    const filteredHN = filterRelevant(hn, topic);
+    const filteredX = filterRelevant(xPosts, topic);
+    const filteredLobsters = filterRelevant(lobsters, topic);
+    const filteredNews = filterRelevantNews(news, topic);
+
+    // Merge and rank by time-decay score
+    const allDiscussions = [...filteredReddit, ...filteredHN, ...filteredX, ...filteredLobsters];
+    const ranked = rankDiscussions(allDiscussions);
+
+    const sourceCounts = {
+      reddit: filteredReddit.length,
+      hn: filteredHN.length,
+      x: filteredX.length,
+      lobsters: filteredLobsters.length,
+      news: filteredNews.length,
     };
-    
-    const filteredReddit = reddit.filter(d => isRelevant(d.title));
-    const filteredHN = hn.filter(d => isRelevant(d.title));
-    const filteredNews = news.filter(n => isRelevant(n.title));
-    // X posts from search are already topic-relevant, but filter anyway
-    const filteredX = xPosts.filter(d => isRelevant(d.title));
 
-    const discussions = [...filteredReddit, ...filteredHN, ...filteredX].sort((a, b) => (b.score + b.comments) - (a.score + a.comments));
+    // Analysis
+    const aiAnalysis = generateAnalysis(topic, ranked, filteredNews, sourceCounts);
 
-    // Generate intelligent analysis from filtered data
-    const aiAnalysis = generateAnalysis(topic, filteredReddit, filteredHN, filteredNews);
-
-    // Extract keywords from all titles
-    const allTexts = [
-      ...discussions.map(d => d.title),
-      ...news.map(n => n.title),
-    ];
+    // Keywords
+    const allTexts = [...ranked.map(d => d.title), ...filteredNews.map(n => n.title)];
     const keywords = extractKeywords(allTexts, topic);
 
-    // Calculate Pulse Score (0-100) from FILTERED results only
-    const totalSources = filteredReddit.length + filteredHN.length + filteredX.length + filteredNews.length;
-    const totalEng = discussions.reduce((s, d) => s + d.score + d.comments, 0);
-    const recentCount = discussions.filter(d => {
-      const m = d.timeAgo.match(/(\d+)\s*(m|h)\s*ago/i);
-      if (!m) return false;
-      const hours = m[2] === "m" ? parseInt(m[1]) / 60 : parseInt(m[1]);
-      return hours < 6;
-    }).length;
-    
-    const sourceScore = Math.min(totalSources / 40, 1) * 25;        // 0-25
-    const engScore = Math.min(totalEng / 5000, 1) * 25;              // 0-25
-    const recencyScore = Math.min(recentCount / 10, 1) * 25;         // 0-25
-    const diversityScore = (filteredReddit.length > 0 ? 6 : 0) + (filteredHN.length > 0 ? 6 : 0) + (filteredNews.length > 0 ? 6 : 0) + (filteredX.length > 0 ? 7 : 0); // 0-25
-    const pulseScore = Math.round(sourceScore + engScore + recencyScore + diversityScore);
+    // Pulse Score
+    const pulseScore = calculatePulseScore(ranked, filteredNews, sourceCounts);
 
     const result = {
       topic,
@@ -205,15 +253,10 @@ export async function POST(req: NextRequest) {
       keyVoices: aiAnalysis.keyVoices || [],
       controversies: aiAnalysis.controversies || [],
       predictions: aiAnalysis.predictions || [],
-      discussions: discussions.slice(0, 25),
-      news: filteredNews,
+      discussions: ranked.slice(0, 30),
+      news: filteredNews.slice(0, 15),
       keywords,
-      sources: {
-        reddit: filteredReddit.length,
-        hn: filteredHN.length,
-        x: filteredX.length,
-        news: filteredNews.length,
-      },
+      sources: sourceCounts,
     };
 
     cache.set(cacheKey, { data: result, timestamp: Date.now() });

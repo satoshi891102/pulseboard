@@ -4,9 +4,31 @@ export interface Discussion {
   score: number;
   comments: number;
   author: string;
-  source: "reddit" | "hn";
+  source: "reddit" | "hn" | "x";
   timeAgo: string;
   subreddit?: string;
+}
+
+/**
+ * Strict relevance filter — only keep results where the topic
+ * appears in the title (case-insensitive). Prevents HN/Reddit
+ * returning tangentially related content.
+ */
+function filterRelevant(items: Discussion[], topic: string): Discussion[] {
+  const terms = topic.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+  return items.filter(item => {
+    const title = item.title.toLowerCase();
+    // Must contain ALL search terms (not just one)
+    return terms.every(term => title.includes(term));
+  });
+}
+
+function filterRelevantNews(items: NewsItem[], topic: string): NewsItem[] {
+  const terms = topic.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+  return items.filter(item => {
+    const title = item.title.toLowerCase();
+    return terms.every(term => title.includes(term));
+  });
 }
 
 export interface NewsItem {
@@ -111,6 +133,63 @@ export async function fetchHN(topic: string): Promise<Discussion[]> {
   } catch {
     return [];
   }
+}
+
+export async function fetchX(topic: string): Promise<Discussion[]> {
+  // Try multiple Nitter instances for X/Twitter search
+  const nitterInstances = [
+    "nitter.privacydev.net",
+    "nitter.poast.org",
+    "nitter.net",
+  ];
+  
+  for (const instance of nitterInstances) {
+    try {
+      const res = await fetch(
+        `https://${instance}/search/rss?f=tweets&q=${encodeURIComponent(topic)}&since_id=0`,
+        { 
+          headers: { "User-Agent": "PulseBoard/1.0" },
+          signal: AbortSignal.timeout(8000),
+        }
+      );
+      if (!res.ok) continue;
+      const xml = await res.text();
+      if (!xml.includes("<item>")) continue;
+      
+      const items: Discussion[] = [];
+      const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+      let match;
+      while ((match = itemRegex.exec(xml)) !== null && items.length < 25) {
+        const item = match[1];
+        const title = (item.match(/<title>([\s\S]*?)<\/title>/)?.[1] || "")
+          .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+          .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+          .replace(/<[^>]+>/g, ""); // strip HTML tags
+        const link = item.match(/<link>([\s\S]*?)<\/link>/)?.[1] || "";
+        const author = item.match(/<dc:creator>([\s\S]*?)<\/dc:creator>/)?.[1]?.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1") || 
+                       link.match(/\/([^\/]+)\/status/)?.[1] || "unknown";
+        const pubDate = item.match(/<pubDate>([\s\S]*?)<\/pubDate>/)?.[1];
+        
+        // Convert nitter URL to x.com URL
+        const xUrl = link.replace(`https://${instance}`, "https://x.com");
+        
+        items.push({
+          title: title.slice(0, 280),
+          url: xUrl,
+          score: 0, // Nitter doesn't expose engagement metrics
+          comments: 0,
+          author: author.replace("@", ""),
+          source: "x" as const,
+          timeAgo: pubDate ? timeAgo(new Date(pubDate)) : "recently",
+        });
+      }
+      if (items.length > 0) return items;
+    } catch {
+      continue;
+    }
+  }
+  
+  return [];
 }
 
 export async function fetchGoogleNews(topic: string): Promise<NewsItem[]> {

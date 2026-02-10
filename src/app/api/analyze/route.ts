@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchReddit, fetchHN, fetchGoogleNews, type Discussion, type NewsItem } from "@/lib/sources";
+import { fetchReddit, fetchHN, fetchGoogleNews, fetchX, type Discussion, type NewsItem } from "@/lib/sources";
 import { extractKeywords } from "@/lib/wordcloud";
 import { analyzeSentiment } from "@/lib/sentiment";
 
@@ -147,17 +147,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(cached.data);
     }
 
-    // Fetch all sources in parallel
-    const [reddit, hn, news] = await Promise.all([
+    // Fetch all sources in parallel (including X)
+    const [reddit, hn, news, xPosts] = await Promise.all([
       fetchReddit(topic),
       fetchHN(topic),
       fetchGoogleNews(topic),
+      fetchX(topic),
     ]);
 
-    const discussions = [...reddit, ...hn].sort((a, b) => (b.score + b.comments) - (a.score + a.comments));
+    // Strict relevance filter — only keep results that actually mention the topic
+    const topicTerms = topic.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+    const isRelevant = (title: string) => {
+      const lower = title.toLowerCase();
+      return topicTerms.every(term => lower.includes(term));
+    };
+    
+    const filteredReddit = reddit.filter(d => isRelevant(d.title));
+    const filteredHN = hn.filter(d => isRelevant(d.title));
+    const filteredNews = news.filter(n => isRelevant(n.title));
+    // X posts from search are already topic-relevant, but filter anyway
+    const filteredX = xPosts.filter(d => isRelevant(d.title));
 
-    // Generate intelligent analysis from the data itself
-    const aiAnalysis = generateAnalysis(topic, reddit, hn, news);
+    const discussions = [...filteredReddit, ...filteredHN, ...filteredX].sort((a, b) => (b.score + b.comments) - (a.score + a.comments));
+
+    // Generate intelligent analysis from filtered data
+    const aiAnalysis = generateAnalysis(topic, filteredReddit, filteredHN, filteredNews);
 
     // Extract keywords from all titles
     const allTexts = [
@@ -166,8 +180,8 @@ export async function POST(req: NextRequest) {
     ];
     const keywords = extractKeywords(allTexts, topic);
 
-    // Calculate Pulse Score (0-100)
-    const totalSources = reddit.length + hn.length + news.length;
+    // Calculate Pulse Score (0-100) from FILTERED results only
+    const totalSources = filteredReddit.length + filteredHN.length + filteredX.length + filteredNews.length;
     const totalEng = discussions.reduce((s, d) => s + d.score + d.comments, 0);
     const recentCount = discussions.filter(d => {
       const m = d.timeAgo.match(/(\d+)\s*(m|h)\s*ago/i);
@@ -176,10 +190,10 @@ export async function POST(req: NextRequest) {
       return hours < 6;
     }).length;
     
-    const sourceScore = Math.min(totalSources / 40, 1) * 30;        // 0-30
-    const engScore = Math.min(totalEng / 5000, 1) * 30;              // 0-30
+    const sourceScore = Math.min(totalSources / 40, 1) * 25;        // 0-25
+    const engScore = Math.min(totalEng / 5000, 1) * 25;              // 0-25
     const recencyScore = Math.min(recentCount / 10, 1) * 25;         // 0-25
-    const diversityScore = (reddit.length > 0 ? 5 : 0) + (hn.length > 0 ? 5 : 0) + (news.length > 0 ? 5 : 0); // 0-15
+    const diversityScore = (filteredReddit.length > 0 ? 6 : 0) + (filteredHN.length > 0 ? 6 : 0) + (filteredNews.length > 0 ? 6 : 0) + (filteredX.length > 0 ? 7 : 0); // 0-25
     const pulseScore = Math.round(sourceScore + engScore + recencyScore + diversityScore);
 
     const result = {
@@ -191,13 +205,14 @@ export async function POST(req: NextRequest) {
       keyVoices: aiAnalysis.keyVoices || [],
       controversies: aiAnalysis.controversies || [],
       predictions: aiAnalysis.predictions || [],
-      discussions: discussions.slice(0, 20),
-      news,
+      discussions: discussions.slice(0, 25),
+      news: filteredNews,
       keywords,
       sources: {
-        reddit: reddit.length,
-        hn: hn.length,
-        news: news.length,
+        reddit: filteredReddit.length,
+        hn: filteredHN.length,
+        x: filteredX.length,
+        news: filteredNews.length,
       },
     };
 

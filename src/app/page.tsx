@@ -18,7 +18,7 @@ const EXAMPLE_TOPICS = [
 
 const HOW_IT_WORKS = [
   { step: "01", title: "Enter a topic", desc: "Type anything — a company, technology, event, or trend." },
-  { step: "02", title: "We scan everything", desc: "Reddit, Hacker News, and 15+ news outlets queried in parallel." },
+  { step: "02", title: "We scan everything", desc: "X, Reddit, Hacker News, and 15+ news outlets queried in parallel." },
   { step: "03", title: "AI analyzes", desc: "Sentiment, key voices, controversies, and predictions generated instantly." },
 ];
 
@@ -114,7 +114,7 @@ export default function Home() {
           </h1>
           
           <p className="text-[var(--color-text-secondary)] mb-10 text-lg md:text-xl max-w-xl mx-auto">
-            AI-powered analysis of Reddit, Hacker News, and Google News — combined into a living dashboard.
+            AI-powered analysis of X, Reddit, Hacker News, and Google News — combined into a living dashboard.
           </p>
 
           <form
@@ -259,8 +259,8 @@ export default function Home() {
                   className="text-left p-3 rounded-lg bg-[var(--color-card)] border border-[var(--color-border)] hover:border-[var(--color-accent)] transition-colors group"
                 >
                   <div className="flex items-start gap-2">
-                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded mt-0.5 ${item.source === "hn" ? "bg-orange-500/20 text-orange-400" : "bg-blue-500/20 text-blue-400"}`}>
-                      {item.source === "hn" ? "HN" : "NEWS"}
+                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded mt-0.5 ${item.source === "hn" ? "bg-orange-500/20 text-orange-400" : item.source === "x" ? "bg-gray-500/20 text-gray-300" : item.source === "reddit" ? "bg-blue-500/20 text-blue-400" : "bg-green-500/20 text-green-400"}`}>
+                      {item.source === "hn" ? "HN" : item.source === "x" ? "X" : item.source === "reddit" ? "RED" : "NEWS"}
                     </span>
                     <span className="text-sm text-[var(--color-text-secondary)] group-hover:text-white transition-colors line-clamp-2">
                       {item.title}
@@ -298,7 +298,7 @@ export default function Home() {
 
         <footer className="text-center mt-12 pb-8 border-t border-[var(--color-border)] pt-6">
           <div className="text-xs text-[var(--color-text-secondary)] space-y-2">
-            <p>Real-time intelligence from Hacker News, Reddit, and Google News.</p>
+            <p>Real-time intelligence from X, Reddit, Hacker News, and Google News.</p>
             <p>No account required. No API keys. Free forever.</p>
             <div className="flex justify-center gap-4 mt-3">
               <Link href="/compare" className="hover:text-white transition-colors">Compare</Link>
